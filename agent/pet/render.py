@@ -17,7 +17,14 @@ from functools import lru_cache
 from itertools import takewhile
 from pathlib import Path
 
-from agent.pet.constants import DEFAULT_SCALE, FRAME_H, FRAME_W, FRAMES_PER_STATE, PetState, state_row_index
+from agent.pet.constants import (
+    DEFAULT_SCALE,
+    FRAME_H,
+    FRAME_W,
+    FRAMES_PER_STATE,
+    PetState,
+    state_row_index,
+)
 from agent.terminal_image import (
     CELL_H,
     CELL_W,
@@ -62,7 +69,9 @@ def _frame_is_blank(frame) -> bool:
 
 
 @lru_cache(maxsize=16)
-def _raw_frames(sheet_path: str, state_value: str, frame_w: int, frame_h: int, frames_per_state: int) -> tuple:
+def _raw_frames(
+    sheet_path: str, state_value: str, frame_w: int, frame_h: int, frames_per_state: int
+) -> tuple:
     """Cropped RGBA frames for one state row, stopping at the first blank column; ``()`` on any decode failure."""
     try:
         from PIL import Image
@@ -70,16 +79,31 @@ def _raw_frames(sheet_path: str, state_value: str, frame_w: int, frame_h: int, f
         sheet = Image.open(Path(sheet_path)).convert("RGBA")
         cols, rows = max(1, sheet.width // frame_w), max(1, sheet.height // frame_h)
         # Clamp to the sheet: some pets ship fewer rows than the taxonomy reserves.
-        top = min(state_row_index(state_value, rows) * frame_h, max(0, sheet.height - frame_h))
-        crops = (sheet.crop((i * frame_w, top, (i + 1) * frame_w, top + frame_h)) for i in range(min(frames_per_state, cols)))
+        top = min(
+            state_row_index(state_value, rows) * frame_h, max(0, sheet.height - frame_h)
+        )
+        crops = (
+            sheet.crop((i * frame_w, top, (i + 1) * frame_w, top + frame_h))
+            for i in range(min(frames_per_state, cols))
+        )
         return tuple(takewhile(lambda f: not _frame_is_blank(f), crops))
     except Exception as exc:
-        logger.debug("pet frame decode failed (%s, %s): %s", sheet_path, state_value, exc)
+        logger.debug(
+            "pet frame decode failed (%s, %s): %s", sheet_path, state_value, exc
+        )
         return ()
 
 
 @lru_cache(maxsize=8)
-def _frames_for(sheet_path: str, state_value: str, frame_w: int, frame_h: int, frames_per_state: int, scale_w: int, scale_h: int):
+def _frames_for(
+    sheet_path: str,
+    state_value: str,
+    frame_w: int,
+    frame_h: int,
+    frames_per_state: int,
+    scale_w: int,
+    scale_h: int,
+):
     """Scaled :func:`_raw_frames` (both cached, so animation-time requests are free)."""
     raw = _raw_frames(sheet_path, state_value, frame_w, frame_h, frames_per_state)
     if not raw or (scale_w, scale_h) == (frame_w, frame_h):
@@ -90,10 +114,19 @@ def _frames_for(sheet_path: str, state_value: str, frame_w: int, frame_h: int, f
 
 
 def state_frame_counts(
-    sheet_path: str | Path, *, frame_w: int = FRAME_W, frame_h: int = FRAME_H, frames_per_state: int = FRAMES_PER_STATE
+    sheet_path: str | Path,
+    *,
+    frame_w: int = FRAME_W,
+    frame_h: int = FRAME_H,
+    frames_per_state: int = FRAMES_PER_STATE,
 ) -> dict[str, int]:
     """Each driven :class:`PetState` → its real (padding-trimmed) frame count (shipped to the desktop canvas)."""
-    return {s.value: len(_raw_frames(str(sheet_path), s.value, frame_w, frame_h, frames_per_state)) for s in PetState}
+    return {
+        s.value: len(
+            _raw_frames(str(sheet_path), s.value, frame_w, frame_h, frames_per_state)
+        )
+        for s in PetState
+    }
 
 
 def _fit_frames_to_cell_grid(frames):
@@ -105,11 +138,20 @@ def _fit_frames_to_cell_grid(frames):
 
     boxes = [b for b in (f.getchannel("A").getbbox() for f in frames) if b]
     if boxes:
-        union = (min(b[0] for b in boxes), min(b[1] for b in boxes), max(b[2] for b in boxes), max(b[3] for b in boxes))
+        union = (
+            min(b[0] for b in boxes),
+            min(b[1] for b in boxes),
+            max(b[2] for b in boxes),
+            max(b[3] for b in boxes),
+        )
         frames = [f.crop(union) for f in frames]
     w, h = frames[0].size
     target = (max(1, round(w / CELL_W)) * CELL_W, max(1, round(h / CELL_H)) * CELL_H)
-    return frames if (w, h) == target else [f.resize(target, Image.LANCZOS) for f in frames]
+    return (
+        frames
+        if (w, h) == target
+        else [f.resize(target, Image.LANCZOS) for f in frames]
+    )
 
 
 def kitty_image_id(slug: str) -> int:
@@ -146,13 +188,31 @@ class PetRenderer:
 
     def _frames(self, state: PetState | str):
         name = state.value if isinstance(state, PetState) else str(state)
-        scaled = max(1, int(self.frame_w * self.scale)), max(1, int(self.frame_h * self.scale))
-        return _frames_for(self.spritesheet, name, self.frame_w, self.frame_h, self.frames_per_state, *scaled)
+        scaled = (
+            max(1, int(self.frame_w * self.scale)),
+            max(1, int(self.frame_h * self.scale)),
+        )
+        return _frames_for(
+            self.spritesheet,
+            name,
+            self.frame_w,
+            self.frame_h,
+            self.frames_per_state,
+            *scaled,
+        )
 
-    def cells(self, state: PetState | str, index: int, *, cols: int | None = None) -> list[list[Cell]]:
+    def cells(
+        self, state: PetState | str, index: int, *, cols: int | None = None
+    ) -> list[list[Cell]]:
         """One frame as a half-block cell grid for Ink's native color props; ``[]`` when unavailable."""
         frames = self._frames(state)
-        return downscale_cells(frames[index % len(frames)], target_cols=cols or self.unicode_cols) if frames else []
+        return (
+            downscale_cells(
+                frames[index % len(frames)], target_cols=cols or self.unicode_cols
+            )
+            if frames
+            else []
+        )
 
     def kitty_payload(self, state: PetState | str, *, image_id: int) -> dict | None:
         """kitty placeholder payload ``{cols, rows, placeholder, frames}`` (transmit escapes + static text grid); ``None`` if no frames."""
@@ -160,8 +220,16 @@ class PetRenderer:
             return None
         frames = _fit_frames_to_cell_grid(frames)
         cols, rows = cell_box(frames[0])
-        encoded = [encode_kitty_virtual(f, image_id=image_id, cols=cols, rows=rows) for f in frames]
-        return {"cols": cols, "rows": rows, "placeholder": kitty_placeholder_rows(cols, rows), "frames": encoded}
+        encoded = [
+            encode_kitty_virtual(f, image_id=image_id, cols=cols, rows=rows)
+            for f in frames
+        ]
+        return {
+            "cols": cols,
+            "rows": rows,
+            "placeholder": kitty_placeholder_rows(cols, rows),
+            "frames": encoded,
+        }
 
     def frame(self, state: PetState | str, index: int) -> str:
         """Encoded escape string for one frame (``index`` taken modulo the frame count), or ``""``."""
@@ -178,7 +246,17 @@ class PetRenderer:
 
 
 def build_renderer(
-    spritesheet: str | Path, *, configured_mode: str | None = None, scale: float = DEFAULT_SCALE, unicode_cols: int = 20, stream=None
+    spritesheet: str | Path,
+    *,
+    configured_mode: str | None = None,
+    scale: float = DEFAULT_SCALE,
+    unicode_cols: int = 20,
+    stream=None,
 ) -> PetRenderer:
     """Resolve the mode from config+env, then construct a :class:`PetRenderer`."""
-    return PetRenderer(spritesheet, mode=resolve_mode(configured_mode, stream=stream), scale=scale, unicode_cols=unicode_cols)
+    return PetRenderer(
+        spritesheet,
+        mode=resolve_mode(configured_mode, stream=stream),
+        scale=scale,
+        unicode_cols=unicode_cols,
+    )
