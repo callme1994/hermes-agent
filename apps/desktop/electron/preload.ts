@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer, webFrame, webUtils } from 'electron'
 
 import type { DesktopProfileRoute } from './desktop-profile'
 import type { HudModifierApi, HudModifierStatus } from './hud-modifier-types'
+import type { RuoyiAccount, RuoyiAuthBridge, RuoyiLogin } from './ruoyi-auth-types'
 import { customWindowControlsEnabled } from './window-controls'
 
 // Which translucency the OS can back. Asked synchronously because the renderer
@@ -28,6 +29,20 @@ const localSkin = ipcRenderer.sendSync('hermes:skin:local')
 const uiPreferencesSnapshot = ipcRenderer.sendSync('hermes:ui-preferences:snapshot')
 
 import { unwrapExpectedNotFound } from './api-expected-404'
+
+contextBridge.exposeInMainWorld('ruoyiAuth', {
+  captcha: () => ipcRenderer.invoke('hermes:ruoyi-auth:captcha'),
+  login: (input: RuoyiLogin) => ipcRenderer.invoke('hermes:ruoyi-auth:login', input),
+  logout: () => ipcRenderer.invoke('hermes:ruoyi-auth:logout'),
+  status: () => ipcRenderer.invoke('hermes:ruoyi-auth:status'),
+  onChange(listener: (account: RuoyiAccount | null) => void) {
+    const forward = (_event: Electron.IpcRendererEvent, account: RuoyiAccount | null) => listener(account)
+
+    ipcRenderer.on('hermes:ruoyi-auth:changed', forward)
+
+    return () => ipcRenderer.removeListener('hermes:ruoyi-auth:changed', forward)
+  }
+} satisfies RuoyiAuthBridge)
 
 contextBridge.exposeInMainWorld('hermesDesktop', {
   glassSupported: translucencySupport?.glass === true,

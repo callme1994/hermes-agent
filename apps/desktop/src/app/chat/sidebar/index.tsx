@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation } from 'react-router'
 
 import { PlatformAvatar } from '@/app/messaging/platform-icon'
+import { RuoyiAccountMenu } from '@/app/ruoyi-auth/account-menu'
 import { Button } from '@/components/ui/button'
 import { Codicon } from '@/components/ui/codicon'
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from '@/components/ui/context-menu'
@@ -2062,6 +2063,7 @@ export function ChatSidebar({
           </div>
         )}
       </SidebarContent>
+      <RuoyiAccountMenu />
       <ProjectDialog />
       {/* One mount for the whole app. The header of WorktreeDialog tells why. */}
       <WorktreeDialog />

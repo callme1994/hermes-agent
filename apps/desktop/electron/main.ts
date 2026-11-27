@@ -550,6 +550,7 @@ import { loadRendererLoadErrorPage } from './renderer-load-error-page'
 import { attachRendererConsoleCapture, formatRendererBoundaryReport } from './renderer-log'
 import { fetchRosterSourceData } from './roster-source-fetch'
 import { rosterSourceStatus } from './roster-source-status'
+import { registerRuoyiAuth } from './ruoyi-auth'
 import { registerSaveDialogIpc } from './save-text-file'
 import {
   classifyStoredSecret,
@@ -14009,6 +14010,7 @@ ipcMain.handle('hermes:window:openInstance', async (event, options) => {
   return { ok: true }
 })
 registerWindowControlIpc(ipcMain, sender => BrowserWindow.fromWebContents(sender))
+registerRuoyiAuth(() => DEV_SERVER || pathToFileURL(resolveRendererIndex()).toString())
 ipcMain.handle('hermes:window:openBrowser', async (_event, tabId) => {
   if (typeof tabId !== 'string' || !tabId.trim()) {
     return { ok: false, error: 'invalid-tab-id' }
